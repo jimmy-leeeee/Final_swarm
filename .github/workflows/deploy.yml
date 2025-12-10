@@ -1,0 +1,64 @@
+name: Deploy to Swarm
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted   # 👈 你本機 runner 會執行
+    env:
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    steps:
+      # Step 1 ─ checkout 專案原始碼
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2 ─ Docker Login
+      - name: Login to Docker Hub
+        run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin
+
+      # Step 3 ─ Build & Push backend
+      - name: Build backend
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t testforccsa/final:backend \
+            -f backend/Dockerfile backend \
+            --push
+
+      # Step 4 ─ Build & Push frontend
+      - name: Build frontend
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t testforccsa/final:frontend \
+            -f frontend/Dockerfile frontend \
+            --push
+
+      # Step 5 ─ Build & Push generator
+      - name: Build generator
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t testforccsa/final:generator \
+            -f generator/Dockerfile generator \
+            --push
+
+      # Step 6 ─ Build & Push db
+      - name: Build db
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t testforccsa/final:db \
+            -f db/Dockerfile db \
+            --push
+
+      # Step 7 ─ 重新部署 Swarm
+      - name: Deploy to Swarm
+        run: |
+          colima start   # 確保 colima 開啟
+          docker info    # 檢查 Docker 是否連到 VM
+          docker stack deploy -c stack.yaml ccsa
